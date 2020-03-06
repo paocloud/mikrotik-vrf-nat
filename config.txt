@@ -1,0 +1,38 @@
+#### Importent Detail ###
+@@@ ether1 Interface = WAN (Access the Internet) - 202.150.11.11/24
+@@@ vlan209 Interface = LAN - 10.10.209.1/24
+@@@ vlan200 Interface = LAN [Shared Services Network] - 10.10.200.1/24
+@@@ 202.150.11.1 is an next-hop gateway address
+
+%%% Config %%%
+
+### Internet Access Interface ###
+/ip address add address=202.150.11.11/24 interface=ether1
+
+### Add ip address to vlan209 [LAN]
+/ip address add address=10.10.209.1/24 interface=vlan209
+
+### Add ip address to vlan200 [Shared Services Network] - main routing table
+/ip address add address=10.10.200.1/24 interface=vlan200
+
+### Add vlan209 to BLUE VRF ###
+/ip route vrf add interfaces=vlan209 route-distinguisher=65531:209 import-route-targets=65531:209 export-route-targets=65531:209 routing-mark=BLUE
+
+### Add default route for BLUE VRF ###
+/ip route add dst-address=0.0.0.0/0 gateway=202.150.11.1@main routing-mark=BLUE check-gateway=ping
+
+### Masquerade 10.10.209.0/24 for access the internet ###
+/ip firewall nat add chain=srcnat action=masquerade routing-mark=BLUE routing-table=BLUE src-address=10.10.209.0/24 out-interface=ether1
+
+### Mark connection for BLUE VRF ###
+/ip firewall mangle add chain=prerouting action=mark-connection new-connection-mark=BLUE-CON  src-address=10.10.209.0/24 in-interface=vlan209
+
+### BLUE Connection to BLUE VRF Routing ###
+/ip firewall mangle add chain=prerouting action=mark-routing new-routing-mark=BLUE passthrough=yes connection-mark=BLUE-CON in-interface=ether1
+
+### Add route from main routing table to BLUE routing table ###
+/ip route add dst-address=10.10.209.0/24 gateway=vlan209
+
+### Add route from BLUE routing table to main for access shared service network ###
+/ip route add dst-address=10.10.200.0/24 gateway=vlan200@main
+
